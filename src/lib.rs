@@ -1,5 +1,6 @@
 pub mod command;
 pub mod core;
+pub mod message;
 pub mod path;
 
 pub mod metadata;

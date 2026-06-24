@@ -1,6 +1,6 @@
-# String Matcher
+# Fuzzy Rank
 
-`string-matcher` is a Rust library for typo-tolerant matching and ranking across several kinds of searchable data.
+`fuzzy-rank` is a Rust library for typo-tolerant matching and ranking across several kinds of searchable data.
 
 It is structured as:
 
@@ -15,11 +15,12 @@ The goal is to keep the hard parts implemented once, while still allowing differ
 - filesystem paths
 - shell commands
 - application and window metadata
+- chat and message text
 
 ## Project Structure
 
 ```text
-string-matcher/
+fuzzy-rank/
 ├── Cargo.toml
 ├── README.md
 └── src
@@ -29,7 +30,11 @@ string-matcher/
     ├── text.rs
     ├── token_match.rs
     ├── path.rs
+    ├── path/
+    │   ├── exact.rs
+    │   └── typo.rs
     ├── command.rs
+    ├── message.rs
     └── metadata.rs
 ```
 
@@ -54,6 +59,7 @@ These modules are domain-specific adapters:
 
 - `path`
 - `command`
+- `message`
 - `metadata`
 
 They own the rules that differ by data type:
@@ -200,6 +206,7 @@ Examples:
 
 - path search cares about basename vs parent components
 - command search cares about executable vs later argv tokens
+- message search cares about phrase continuity and token coverage
 - metadata search cares about field priority such as title vs class vs description
 
 These are not accidental differences. They are the reason the adapters exist.
@@ -210,28 +217,25 @@ These are not accidental differences. They are the reason the adapters exist.
 
 Purpose:
 
-- typo-tolerant path matching
-- normal path-position matching
+- split exact-path and typo-path matching
 - basename/dirname-aware ranking
+- shared top-level namespace for path semantics
 
 This adapter is intended for zoxide-style search.
 
 It owns:
 
-- `TypoQuery`
-- `PathMatch`
-- `MatchScope`
-- path-specific normal-match helpers:
-  - `match_penalty`
-  - `match_path_position`
-  - `match_qualities`
+- `path::exact`
+- `path::typo`
 
 It uses shared core from:
 
-- `core` for edit distance
-- `ranking` for typo sort-key comparison
-- `text` for path-token splitting and query variants
-- `token_match` for token alignment and compound-token matching
+- `path::exact` uses `text` for path normalization and token-boundary logic
+- `path::typo` uses:
+  - `core` for edit distance
+  - `ranking` for typo sort-key comparison
+  - `text` for path-token splitting and query variants
+  - `token_match` for token alignment and compound-token matching
 
 What is path-specific here:
 
@@ -247,26 +251,32 @@ What is path-specific here:
 
 This is the adapter to use for filesystem path search.
 
-### Exact path sort order
+### `path::exact`
 
-`path` currently has two different ranking paths.
-
-Normal path matching uses adapter-local helpers:
+`path::exact` owns the normal non-typo path helpers:
 
 - `match_qualities`
 - `match_path_position`
 - `match_penalty`
 
-That normal path ordering is not implemented through `ranking.rs`.
-It is currently path-specific code in `path.rs`.
+This normal path ordering is adapter-local. It does not use `ranking.rs`.
 
-The normal path helpers effectively expose these keys:
+The exact-path helpers effectively expose these keys:
 
 1. keyword matchability through `match_qualities`
 2. summed path position through `match_path_position`
 3. summed structural penalty through `match_penalty`
 
-In zoxide, callers then decide how to use those values in normal non-typo ordering.
+Callers then decide how to combine those values with score/frecency.
+
+### `path::typo`
+
+`path::typo` owns:
+
+- `TypoQuery`
+- `PathMatch`
+- `MatchScope`
+- `query_from_keywords`
 
 Typo path matching uses the shared `PathTypoSortKey` comparator from `ranking.rs`.
 The exact typo sort key order is:
@@ -358,6 +368,51 @@ Shared versus adapter-local:
   - `position`
   - `structure`
   - `secondary`
+
+## `message.rs`
+
+Purpose:
+
+- tokenized text matching for chat logs, notes, or message history
+- phrase-aware ordering for exact multi-token sequences
+- lightweight precomputation for repeated query evaluation
+
+This adapter is intended for message search where coverage and phrase continuity
+matter more than typo-distance ranking.
+
+It owns:
+
+- `MessageQuery`
+- `MessageCandidate`
+- `PreparedMessageCandidate`
+- `MessageMatch`
+- `contains_query_signal`
+
+It uses shared core from:
+
+- `text` for lowercasing and token splitting
+
+What is message-specific here:
+
+- phrase matches outrank split-token matches
+- broader token coverage outranks repeated occurrences of only one query term
+- repeated query-term occurrences refine ties after phrase coverage
+
+Final message result ordering is:
+
+1. phrase presence
+2. matched query-term count
+3. phrase occurrence count
+4. total matched-term occurrences
+5. descending `score`
+6. `key`
+
+This is the adapter to use for:
+
+- chat messages
+- notes or snippets
+- searchable conversation history
+- other single-text records where phrase continuity matters
 
 ## `metadata.rs`
 
@@ -468,6 +523,7 @@ Shared versus adapter-local:
 
 - Use `path` for filesystem paths.
 - Use `command` for shell commands or command history lines.
+- Use `message` for tokenized free-text records where phrase continuity matters.
 - Use `metadata` for apps, windows, or generic multi-field searchable records.
 
 If the data is not naturally a path, do not force it through `path`.
@@ -481,9 +537,9 @@ The current design is:
 2. `ranking` provides one ranking/comparison framework.
 3. `text` provides one shared text/query-prep layer.
 4. `token_match` provides one shared token-matching layer.
-5. `path`, `command`, and `metadata` adapt those shared layers to their own domains.
+5. `path`, `command`, `message`, and `metadata` adapt those shared layers to their own domains.
 
-So the crate does not have three unrelated matcher implementations anymore.
+So the crate does not have separate ad hoc matcher implementations anymore.
 It has:
 
 - one shared engine
@@ -566,13 +622,13 @@ For example, an application launcher may want:
 - normal apps above settings/system modules
 - earlier pin positions above later pin positions
 
-Those are not string-matching concepts, so they should not be hardcoded into `string-matcher`.
+Those are not string-matching concepts, so they should not be hardcoded into `fuzzy-rank`.
 
 Instead, callers should express those rules through the candidate `score` they pass in, or through separate non-search ordering when search is empty.
 
 That means the intended split is:
 
-- `string-matcher` decides how good the text match is
+- `fuzzy-rank` decides how good the text match is
 - the caller decides how important the candidate is after textual rank ties or near-ties
 
 This is why concepts like `pinned` or `system app` are not explicit library parameters today.

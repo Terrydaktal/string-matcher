@@ -1,10 +1,10 @@
 [package]
-name = "string-matcher"
+name = "fuzzy-rank"
 version = "0.1.0"
 edition = "2024"
 
 [lib]
-name = "string_matcher"
+name = "fuzzy_rank"
 path = "src/lib.rs"
 
 [dependencies]

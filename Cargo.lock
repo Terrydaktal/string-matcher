@@ -3,5 +3,5 @@
 version = 4
 
 [[package]]
-name = "string-matcher"
+name = "fuzzy-rank"
 version = "0.1.0"
