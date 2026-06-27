@@ -286,8 +286,8 @@ The exact typo sort key order is:
 2. `operations`
 3. `ratio_milli`
 4. `position`
-5. `structure`
-6. descending `score`
+5. descending `score`
+6. `structure`
 7. `path_depth`
 8. `key`
 

@@ -230,8 +230,8 @@ pub fn compare_path_typo_sort_keys(
         .then_with(|| left.operations.cmp(&right.operations))
         .then_with(|| left.ratio_milli.cmp(&right.ratio_milli))
         .then_with(|| left.position.cmp(&right.position))
-        .then_with(|| left.structure.cmp(&right.structure))
         .then_with(|| right.score.total_cmp(&left.score))
+        .then_with(|| left.structure.cmp(&right.structure))
         .then_with(|| left.path_depth.cmp(&right.path_depth))
         .then_with(|| left.key.cmp(right.key))
 }

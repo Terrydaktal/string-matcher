@@ -744,13 +744,25 @@ mod tests {
     }
 
     #[test]
-    fn frecency_breaks_ties_after_distance_ratio_position_and_structure() {
+    fn path_position_beats_frecency_when_typo_quality_is_equal() {
         let mut matches = vec![
-            best_match("/tmp/xfce4-terminal", 1.0, "x4ce4").unwrap(),
-            best_match("/var/xfce4-utility", 100.0, "x4ce4").unwrap(),
+            best_match("/home/lewis/xfce4-terminal", 1.0, "x4ce4").unwrap(),
+            best_match("/home/xfce4/project", 100.0, "x4ce4").unwrap(),
         ];
         sort_matches(&mut matches);
-        assert_eq!(matches[0].path, "/var/xfce4-utility");
+        assert_eq!(matches[0].path, "/home/lewis/xfce4-terminal");
+        assert_eq!(matches[0].distance, matches[1].distance);
+        assert_eq!(matches[0].ratio, matches[1].ratio);
+    }
+
+    #[test]
+    fn frecency_breaks_ties_after_path_position() {
+        let mut matches = vec![
+            best_match("/home/lewis/.local/share/applications", 30.5, "appliatoin").unwrap(),
+            best_match("/home/lewis/Dev/applicationlauncher", 122.4, "appliatoin").unwrap(),
+        ];
+        sort_matches(&mut matches);
+        assert_eq!(matches[0].path, "/home/lewis/Dev/applicationlauncher");
         assert_eq!(matches[0].distance, matches[1].distance);
         assert_eq!(matches[0].ratio, matches[1].ratio);
     }
